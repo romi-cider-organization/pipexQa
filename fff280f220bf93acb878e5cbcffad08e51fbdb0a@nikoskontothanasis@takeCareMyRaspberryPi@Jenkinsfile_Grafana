@@ -1,0 +1,37 @@
+// The failedStages variable is reused between stages
+def failedStages=[]
+def result=[]
+//Declarative
+pipeline {
+  agent { label 'RaspberryPi' }
+  //parameters {}
+    
+  options {
+    timeout(time: 1, unit: 'HOURS')
+    //Skip the default checkout to clear the workspace first and then checkout in an "Initialize" stage.
+    skipDefaultCheckout()
+  }
+  
+  stages {
+    stage('Speedtest For Grafana') {
+      steps {
+      cleanWs()
+      checkout scm
+        script {
+        withCredentials([
+          usernamePassword(credentialsId: 'Grafana_username_password', usernameVariable: 'GrafanaUser', passwordVariable: 'GrafanaPass')
+        ]){
+         sh "sudo python3 scripts/speedtestGrafana.py ${GrafanaUser} ${GrafanaPass}"
+         }
+        }
+      }
+      post {
+        failure {
+          script { failedStages.add(STAGE_NAME) }
+          echo "Failed at stage \"${STAGE_NAME}\" with unhandled exception."
+          telegramSend(message: "Hey Nikos, Something went wrong on \"${STAGE_NAME}\". Please check it here: \"${BUILD_URL}console\"")
+        }
+      }      
+    }
+  }
+}
